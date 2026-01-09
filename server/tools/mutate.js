@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { getCustomerClient } from '../auth.js';
+import { formatSuccess, formatError } from '../utils/response-format.js';
 
 /**
  * Execute mutation operations using GoogleAdsService.Mutate
@@ -20,22 +21,16 @@ export async function mutate(params) {
     dry_run = true
   } = params;
 
-  // Validate required parameters
-  if (!customer_id) {
-    return {
-      success: false,
-      error: 'customer_id is required (either as parameter or GOOGLE_ADS_CUSTOMER_ID env var)'
-    };
-  }
-
-  if (!operations || !Array.isArray(operations) || operations.length === 0) {
-    return {
-      success: false,
-      error: 'operations array is required and must contain at least one operation'
-    };
-  }
-
   try {
+    // Validate required parameters
+    if (!customer_id) {
+      throw new Error('customer_id is required (either as parameter or GOOGLE_ADS_CUSTOMER_ID env var)');
+    }
+
+    if (!operations || !Array.isArray(operations) || operations.length === 0) {
+      throw new Error('operations array is required and must contain at least one operation');
+    }
+
     const customer = getCustomerClient(customer_id);
 
     // Execute mutation with validation options
@@ -44,21 +39,20 @@ export async function mutate(params) {
       validateOnly: dry_run
     });
 
-    return {
-      success: true,
-      dry_run,
-      results: response,
-      message: dry_run
-        ? 'Validation successful - no changes made'
-        : 'Mutations applied successfully',
-      operations_count: operations.length
-    };
+    const message = dry_run
+      ? 'Validation successful - no changes made'
+      : 'Mutations applied successfully';
+
+    return formatSuccess({
+      summary: `${message} (${operations.length} operation${operations.length !== 1 ? 's' : ''})`,
+      data: response || [],
+      metadata: {
+        dry_run,
+        operations_count: operations.length,
+        customer_id
+      }
+    });
   } catch (error) {
-    return {
-      success: false,
-      dry_run,
-      error: error.message,
-      error_details: error.errors || null
-    };
+    return formatError(error);
   }
 }
